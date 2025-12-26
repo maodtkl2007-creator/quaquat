@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trò Chơi Quả Quất </title>
+    <!-- Thêm PWA metadata để có thể thêm vào Màn hình chính -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#f97316">
+    <link rel="icon" href="https://placehold.co/32x32/f97316/ffffff?text=Q" sizes="32x32">
+    <link rel="apple-touch-icon" href="https://placehold.co/192x192/f97316/ffffff?text=Q">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap');
+
+        body {
+            font-family: 'Patrick Hand', cursive; /* Phông chữ kiểu viết tay vui nhộn */
+            background: linear-gradient(135deg, #fef9c3 0%, #fde047 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow-x: hidden;
+            user-select: none;
+        }
+
+        .quat-item {
+            transition: all 0.3s ease;
+            cursor: pointer;
+            filter: drop-shadow(0 4px 3px rgba(0,0,0,0.2));
+        }
+
+        .quat-item:hover {
+            transform: scale(1.1) rotate(5deg);
+        }
+
+        .quat-item.selected {
+            opacity: 0.5;
+            filter: grayscale(80%);
+            transform: scale(0.9);
+        }
+
+        .quat-item.to-be-removed {
+            animation: popOut 0.5s forwards;
+        }
+
+        @keyframes popOut {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+            100% { transform: scale(0); opacity: 0; }
+        }
+
+        .row-container {
+            transition: background-color 0.3s;
+        }
+        
+        .row-container:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Khi một hàng đã được chọn để lấy, làm mờ các hàng khác */
+        .rows-wrapper.selecting-row .row-container:not(.active-row) {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
+        .game-btn {
+            background: #ea580c; /* Orange-600 */
+            color: white;
+            border: 4px solid #9a3412;
+            box-shadow: 4px 4px 0px #9a3412;
+            transition: all 0.1s;
+        }
+
+        .game-btn:active {
+            transform: translate(2px, 2px);
+            box-shadow: 2px 2px 0px #9a3412;
+        }
+
+        .game-btn:disabled {
+            background: #9ca3af;
+            border-color: #4b5563;
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+        
+        .modal {
+            background-color: rgba(0,0,0,0.7);
+            backdrop-filter: blur(4px);
+        }
+
+        /* Style cho thông báo hành động (Toast Notification) */
+        .action-toast {
+            position: absolute;
+            top: 20px; /* Vị trí mặc định */
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(234, 88, 12, 0.95); /* Màu cam đậm */
+            color: white;
+            padding: 10px 24px;
+            border-radius: 50px;
+            font-size: 1.25rem;
+            font-weight: bold;
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            pointer-events: none;
+            z-index: 30;
+            white-space: nowrap;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            border: 2px solid #fff;
+        }
+
+        .action-toast.show {
+            opacity: 1;
+            top: 100px; /* Di chuyển xuống khi hiện */
+        }
+    </style>
+</head>
+<body class="p-4">
+
+    <!-- Main Menu -->
+    <div id="mainMenu" class="w-full max-w-md bg-white p-8 rounded-2xl shadow-2xl border-4 border-orange-500 text-center">
+        <h1 class="text-5xl font-bold text-orange-600 mb-2">QUẢ QUẤT</h1>
+        <p class="text-gray-600 mb-6 text-xl">Ai lấy quả cuối cùng là THUA!</p>
+        
+        <div class="space-y-4">
+            <button onclick="startGame('PVP')" class="game-btn w-full py-3 text-2xl rounded-xl">
+                <i class="fas fa-user-friends mr-2"></i> 2 Người Chơi
+            </button>
+            
+            <div class="relative group">
+                <button class="game-btn w-full py-3 text-2xl rounded-xl bg-green-600 border-green-800 shadow-[4px_4px_0px_#166534]">
+                    <i class="fas fa-robot mr-2"></i> Chơi với Bot
+                </button>
+                <!-- Bot Difficulty Dropdown -->
+                <div class="mt-2 grid grid-cols-3 gap-2">
+                    <button onclick="startGame('BOT', 'EASY')" class="bg-blue-400 hover:bg-blue-500 text-white py-2 rounded-lg font-bold shadow-md border-b-4 border-blue-700 active:border-b-0 active:translate-y-1">Dễ</button>
+                    <button onclick="startGame('BOT', 'MEDIUM')" class="bg-yellow-400 hover:bg-yellow-500 text-white py-2 rounded-lg font-bold shadow-md border-b-4 border-yellow-700 active:border-b-0 active:translate-y-1">Vừa</button>
+                    <button onclick="startGame('BOT', 'HARD')" class="bg-red-500 hover:bg-red-600 text-white py-2 rounded-lg font-bold shadow-md border-b-4 border-red-800 active:border-b-0 active:translate-y-1">Khó</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-8 text-left bg-orange-50 p-4 rounded-lg border border-orange-200">
+            <h3 class="font-bold text-orange-800">Luật chơi:</h3>
+            <ul class="list-disc list-inside text-gray-700 text-lg">
+                <li>Có 3 hàng quất (10, 7, 3).</li>
+                <li>Mỗi lượt chọn 1 hàng và lấy số lượng tùy ý (ít nhất 1 quả).</li>
+                <li>Người phải lấy quả cuối cùng sẽ thua.</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="gameScreen" class="hidden w-full max-w-3xl flex-col items-center relative">
+        <!-- Thông báo hành động -->
+        <div id="actionToast" class="action-toast">Người chơi 1 đã lấy 3 quả từ Hàng 2</div>
+
+        <!-- Header Info -->
+        <div class="flex justify-between w-full items-end mb-4 bg-white/80 p-4 rounded-xl shadow-lg border-2 border-orange-300">
+            <div>
+                <button onclick="showMenu()" class="text-orange-600 hover:text-orange-800 font-bold">
+                    <i class="fas fa-arrow-left"></i> Menu
+                </button>
+                <div class="text-2xl font-bold text-gray-800 mt-1">
+                    <span id="modeDisplay">PVP</span>
+                </div>
+            </div>
+            <div class="text-center">
+                <div class="text-sm text-gray-500 uppercase font-bold tracking-wider">Lượt hiện tại</div>
+                <div id="turnIndicator" class="text-3xl font-bold text-orange-600 animate-pulse">
+                    Người chơi 1
+                </div>
+            </div>
+            <div>
+                <button id="confirmBtn" onclick="confirmMove()" disabled 
+                    class="game-btn px-6 py-2 rounded-lg text-xl disabled:opacity-50 disabled:translate-x-0 disabled:shadow-none">
+                    Xác Nhận Lấy
+                </button>
+            </div>
+        </div>
+
+        <!-- Game Board -->
+        <div id="gameBoard" class="rows-wrapper w-full bg-white/60 p-6 rounded-2xl shadow-xl border-4 border-yellow-400 space-y-6">
+            <!-- Rows will be injected here -->
+        </div>
+
+        <div id="messageArea" class="mt-4 h-8 text-xl font-bold text-red-500 text-center"></div>
+    </div>
+
+    <!-- Game Over Modal -->
+    <div id="gameOverModal" class="modal fixed inset-0 hidden flex items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center border-4 border-orange-500 animate-bounce-in">
+            <h2 id="winnerText" class="text-4xl font-bold text-orange-600 mb-4">Người chơi 1 Thắng!</h2>
+            <div class="text-6xl mb-6">🏆</div>
+            <p id="loserText" class="text-gray-600 mb-6 text-xl">Người chơi 2 đã ăn quả cuối cùng.</p>
+            <div class="flex gap-4 justify-center">
+                <button onclick="showMenu()" class="px-6 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg font-bold text-gray-700">Menu</button>
+                <button onclick="restartGame()" class="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-bold shadow-lg">Chơi Lại</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Game Config & State ---
+        const INITIAL_ROWS = [10, 7, 3];
+        let currentRows = [];
+        let gameMode = 'PVP'; // 'PVP' or 'BOT'
+        let botDifficulty = 'EASY';
+        let currentPlayer = 1; // 1 or 2
+        let selectedRowIndex = -1;
+        let selectedCount = 0;
+        let isProcessing = false;
+
+        // --- DOM Elements ---
+        const mainMenu = document.getElementById('mainMenu');
+        const gameScreen = document.getElementById('gameScreen');
+        const gameBoard = document.getElementById('gameBoard');
+        const turnIndicator = document.getElementById('turnIndicator');
+        const confirmBtn = document.getElementById('confirmBtn');
+        const messageArea = document.getElementById('messageArea');
+        const gameOverModal = document.getElementById('gameOverModal');
+        const modeDisplay = document.getElementById('modeDisplay');
+        const actionToast = document.getElementById('actionToast');
+
+        // --- Core Functions ---
+
+        function startGame(mode, difficulty = 'EASY') {
+            gameMode = mode;
+            botDifficulty = difficulty;
+            currentPlayer = 1;
+            currentRows = [...INITIAL_ROWS]; // Clone array
+            
+            mainMenu.classList.add('hidden');
+            gameScreen.classList.remove('hidden');
+            gameScreen.classList.add('flex');
+            
+            let modeText = mode === 'PVP' ? '2 Người Chơi' : `BOT (${difficulty === 'EASY' ? 'Dễ' : difficulty === 'MEDIUM' ? 'Vừa' : 'Khó'})`;
+            modeDisplay.innerText = modeText;
+
+            renderBoard();
+            updateTurnUI();
+        }
+
+        function showMenu() {
+            gameOverModal.classList.add('hidden');
+            gameScreen.classList.add('hidden');
+            gameScreen.classList.remove('flex');
+            mainMenu.classList.remove('hidden');
+        }
+
+        function restartGame() {
+            gameOverModal.classList.add('hidden');
+            startGame(gameMode, botDifficulty);
+        }
+
+        function renderBoard() {
+            gameBoard.innerHTML = '';
+            gameBoard.className = `rows-wrapper w-full bg-white/60 p-6 rounded-2xl shadow-xl border-4 border-yellow-400 space-y-6 ${selectedRowIndex !== -1 ? 'selecting-row' : ''}`;
+
+            currentRows.forEach((count, rowIndex) => {
+                const rowDiv = document.createElement('div');
+                rowDiv.className = `row-container p-4 rounded-xl border-2 border-dashed border-gray-300 flex flex-wrap gap-2 items-center min-h-[80px] ${selectedRowIndex === rowIndex ? 'active-row bg-orange-100 border-orange-400' : ''}`;
+                
+                // Add Row Label
+                const label = document.createElement('div');
+                label.className = "w-full text-gray-400 text-sm font-bold mb-1";
+                label.innerText = `Hàng ${rowIndex + 1} (${count})`;
+                rowDiv.appendChild(label);
+
+                if (count === 0) {
+                    const emptyText = document.createElement('span');
+                    emptyText.className = "text-gray-400 italic w-full text-center";
+                    emptyText.innerText = "Hết quả";
+                    rowDiv.appendChild(emptyText);
+                } else {
+                    for (let i = 0; i < count; i++) {
+                        const quat = document.createElement('div');
+                        // Use SVG or customized div for Quat
+                        quat.className = `quat-item w-10 h-10 rounded-full flex items-center justify-center text-xl shadow-sm relative`;
+                        
+                        // Style the Kumquat (Green leaf, Orange body)
+                        quat.innerHTML = `
+                            <div class="w-full h-full bg-orange-500 rounded-full relative overflow-hidden border border-orange-600">
+                                <div class="absolute top-0 left-1/2 -translate-x-1/2 w-4 h-2 bg-green-600 rounded-b-full"></div>
+                                <div class="absolute top-1 left-2 w-2 h-2 bg-white opacity-30 rounded-full"></div>
+                            </div>
+                        `;
+                        
+                        // Check selection state
+                        // Logic: If this row is selected, highlight items selected for removal
+                        if (selectedRowIndex === rowIndex && i >= count - selectedCount) {
+                            quat.classList.add('selected');
+                            // Add an X overlay
+                            quat.innerHTML += `<div class="absolute inset-0 flex items-center justify-center text-red-600 font-bold text-2xl drop-shadow-md">✕</div>`;
+                        }
+
+                        quat.onclick = () => handleQuatClick(rowIndex, i);
+                        rowDiv.appendChild(quat);
+                    }
+                }
+
+                gameBoard.appendChild(rowDiv);
+            });
+
+            // Update confirm button
+            confirmBtn.disabled = selectedCount === 0;
+            confirmBtn.innerText = selectedCount > 0 ? `Lấy ${selectedCount} quả` : "Chọn quả";
+        }
+
+        function handleQuatClick(rowIndex, fruitIndex) {
+            if (isProcessing) return;
+            if (gameMode === 'BOT' && currentPlayer === 2) return; // Wait for bot
+
+            // If clicking a different row, reset selection
+            if (selectedRowIndex !== -1 && selectedRowIndex !== rowIndex) {
+                selectedRowIndex = -1;
+                selectedCount = 0;
+            }
+
+            selectedRowIndex = rowIndex;
+            // The logic: Clicking index i means we take fruit i and everything to the RIGHT (visualizing array 0..n).
+            // Actually simpler: In Nim, order doesn't matter.
+            // UI Logic: Clicking index `i` selects `i` and all subsequent fruits (visual right side).
+            // So if row has 10 fruits (idx 0-9). Click idx 7. We take 7, 8, 9 (3 fruits).
+            // count = total - index
+            
+            const totalInRow = currentRows[rowIndex];
+            const newSelectedCount = totalInRow - fruitIndex;
+            
+            // Toggle logic: if clicking the start of existing selection, deselect
+            if (selectedCount === newSelectedCount) {
+                selectedRowIndex = -1;
+                selectedCount = 0;
+            } else {
+                selectedCount = newSelectedCount;
+            }
+
+            renderBoard();
+        }
+
+        async function confirmMove() {
+            if (selectedRowIndex === -1 || selectedCount === 0) return;
+            
+            // Prepare notification data before resetting variables
+            let playerName = "";
+            if (gameMode === 'PVP') {
+                playerName = `Người chơi ${currentPlayer}`;
+            } else {
+                playerName = currentPlayer === 1 ? "BẠN" : "BOT";
+            }
+            const movedRow = selectedRowIndex + 1;
+            const movedCount = selectedCount;
+
+            isProcessing = true;
+            
+            // 1. Animate removal
+            const rowDivs = gameBoard.children;
+            const targetRow = rowDivs[selectedRowIndex];
+            const fruits = targetRow.querySelectorAll('.quat-item');
+            
+            // Identify visual elements to remove (the last `selectedCount` elements)
+            const totalFruits = fruits.length;
+            for(let i = totalFruits - selectedCount; i < totalFruits; i++) {
+                if(fruits[i]) fruits[i].classList.add('to-be-removed');
+            }
+
+            // Wait for animation
+            await new Promise(r => setTimeout(r, 400));
+
+            // Show Notification
+            showActionNotification(playerName, movedCount, movedRow);
+
+            // 2. Update Logic
+            currentRows[selectedRowIndex] -= selectedCount;
+            
+            // Reset selection
+            selectedRowIndex = -1;
+            selectedCount = 0;
+            renderBoard();
+
+            // 3. Check Win
+            if (checkGameOver()) {
+                handleGameOver(currentPlayer === 1 ? 2 : 1); // If current player moved and cleared board? No.
+                // Wait. Rule: Last one taking loses.
+                // If board is empty AFTER my turn, I took the last one. I lose.
+                // So the OTHER player wins.
+                return;
+            }
+
+            // 4. Switch Turn
+            currentPlayer = currentPlayer === 1 ? 2 : 1;
+            updateTurnUI();
+            isProcessing = false;
+
+            // 5. Trigger Bot if needed
+            if (gameMode === 'BOT' && currentPlayer === 2) {
+                setTimeout(botTurn, 1000);
+            }
+        }
+
+        function showActionNotification(player, count, row) {
+            actionToast.innerText = `${player} đã lấy ${count} quả ở Hàng ${row}`;
+            actionToast.classList.add('show');
+            
+            // Thời gian hiển thị là 3.5 giây cho tất cả người chơi
+            setTimeout(() => {
+                actionToast.classList.remove('show');
+            }, 3500); 
+        }
+
+        function updateTurnUI() {
+            if (gameMode === 'PVP') {
+                turnIndicator.innerText = `Người chơi ${currentPlayer}`;
+                turnIndicator.className = `text-3xl font-bold animate-pulse ${currentPlayer === 1 ? 'text-orange-600' : 'text-blue-600'}`;
+            } else {
+                if (currentPlayer === 1) {
+                    turnIndicator.innerText = "Lượt của BẠN";
+                    turnIndicator.className = "text-3xl font-bold text-orange-600 animate-pulse";
+                    messageArea.innerText = "";
+                } else {
+                    turnIndicator.innerText = "Lượt của BOT";
+                    turnIndicator.className = "text-3xl font-bold text-gray-600 animate-pulse";
+                    messageArea.innerText = "Bot đang suy nghĩ...";
+                }
+            }
+        }
+
+        function checkGameOver() {
+            // Game over if sum of all rows is 0
+            const total = currentRows.reduce((a, b) => a + b, 0);
+            return total === 0;
+        }
+
+        function handleGameOver(winner) {
+            let winnerName = "";
+            let loserText = "";
+
+            if (gameMode === 'PVP') {
+                winnerName = `Người chơi ${winner} Thắng!`;
+                loserText = `Người chơi ${winner === 1 ? 2 : 1} đã phải ăn quả cuối cùng.`;
+            } else {
+                if (winner === 1) {
+                    winnerName = "BẠN THẮNG!";
+                    loserText = "Bot đã phải ăn quả cuối cùng.";
+                } else {
+                    winnerName = "BOT THẮNG!";
+                    loserText = "Bạn đã phải ăn quả cuối cùng.";
+                }
+            }
+
+            document.getElementById('winnerText').innerText = winnerName;
+            document.getElementById('loserText').innerText = loserText;
+            gameOverModal.classList.remove('hidden');
+        }
+
+        // --- BOT LOGIC (Không đổi) ---
+
+        function botTurn() {
+            const move = calculateBotMove();
+            
+            // Visualize Bot Selection
+            selectedRowIndex = move.rowIndex;
+            selectedCount = move.count;
+            renderBoard();
+
+            // Delay then confirm
+            setTimeout(() => {
+                confirmMove();
+            }, 800);
+        }
+
+        function calculateBotMove() {
+            // Difficulty Levels
+            if (botDifficulty === 'EASY') {
+                // Random legal move
+                return getRandomMove();
+            } else if (botDifficulty === 'MEDIUM') {
+                // 40% chance of random, 60% optimal
+                if (Math.random() < 0.4) return getRandomMove();
+                return getOptimalMove();
+            } else {
+                // HARD / PROFESSIONAL
+                return getOptimalMove();
+            }
+        }
+
+        function getRandomMove() {
+            // Get available rows
+            let availableRows = [];
+            currentRows.forEach((count, idx) => {
+                if (count > 0) availableRows.push(idx);
+            });
+            
+            const randomRow = availableRows[Math.floor(Math.random() * availableRows.length)];
+            const maxTake = currentRows[randomRow];
+            const randomCount = Math.floor(Math.random() * maxTake) + 1;
+            
+            return { rowIndex: randomRow, count: randomCount };
+        }
+
+        function getOptimalMove() {
+            // Standard Nim Sum Logic with Misere play exception
+            
+            let nimSum = 0;
+            currentRows.forEach(c => nimSum ^= c);
+
+            // Check for Endgame Scenario (Misere Play Exception)
+            // If all piles have either 0 or 1 item, we want to leave an ODD number of 1s.
+            let nonOnePiles = 0;
+            currentRows.forEach(c => { if (c > 1) nonOnePiles++; });
+
+            if (nonOnePiles === 0) {
+                // We are in endgame (only 1s left).
+                // We want to take 1 such that remaining count of 1s is ODD?
+                // Wait, simply: number of piles with size > 0.
+                // If currently even number of piles, taking 1 leaves odd. Winner.
+                // If currently odd, we are forced to leave even. Loser.
+                // Just take 1 from any pile.
+                return getRandomMove(); 
+            }
+            
+            // Special Misere Adjustment:
+            // If there is exactly ONE pile with > 1 item.
+            if (nonOnePiles === 1) {
+                // We want to reduce this pile so that the remaining piles (all size 1) count is ODD.
+                // Find the big pile
+                let bigPileIdx = currentRows.findIndex(c => c > 1);
+                let onesCount = 0;
+                currentRows.forEach(c => { if(c === 1) onesCount++; });
+                
+                // If onesCount is Even (e.g. 2 piles of 1), we want to leave 1 item in the big pile (total 1s = 3 => odd => we win).
+                // If onesCount is Odd, we want to remove the entire big pile (total 1s = odd => we win).
+                
+                let targetSize = (onesCount % 2 === 0) ? 1 : 0;
+                let takeAmount = currentRows[bigPileIdx] - targetSize;
+                
+                return { rowIndex: bigPileIdx, count: takeAmount };
+            }
+
+            // Standard Nim Strategy (Make Nim-Sum 0)
+            if (nimSum !== 0) {
+                for (let i = 0; i < currentRows.length; i++) {
+                    let target = currentRows[i] ^ nimSum;
+                    if (target < currentRows[i]) {
+                        return { rowIndex: i, count: currentRows[i] - target };
+                    }
+                }
+            }
+
+            // If Nim-Sum is already 0 (Losing position), or fallback
+            // Just take 1 from the largest pile to prolong game and hope for opponent mistake
+            let maxVal = -1;
+            let maxIdx = -1;
+            currentRows.forEach((c, i) => {
+                if (c > maxVal) { maxVal = c; maxIdx = i; }
+            });
+            return { rowIndex: maxIdx, count: 1 };
+        }
+
+    </script>
+</body>
+</html>
