@@ -125,7 +125,7 @@
     <!-- Main Menu -->
     <div id="mainMenu" class="w-full max-w-md bg-white p-8 rounded-2xl shadow-2xl border-4 border-orange-500 text-center">
         <h1 class="text-5xl font-bold text-orange-600 mb-2">QUẢ QUẤT</h1>
-        <p class="text-gray-600 mb-6 text-xl">Ai lấy quả cuối cùng là THUA!</p>
+        <p class="text-gray-600 mb-6 text-xl">Người chơi nào để lại 1 quả cuối cùng sẽ THẮNG!</p> 
         
         <div class="space-y-4">
             <button onclick="startGame('PVP')" class="game-btn w-full py-3 text-2xl rounded-xl">
@@ -146,11 +146,12 @@
         </div>
 
         <div class="mt-8 text-left bg-orange-50 p-4 rounded-lg border border-orange-200">
-            <h3 class="font-bold text-orange-800">Luật chơi:</h3>
+            <h3 class="font-bold text-orange-800">Luật chơi (Mới):</h3>
             <ul class="list-disc list-inside text-gray-700 text-lg">
                 <li>Có 3 hàng quất (10, 7, 3).</li>
                 <li>Mỗi lượt chọn 1 hàng và lấy số lượng tùy ý (ít nhất 1 quả).</li>
-                <li>Người phải lấy quả cuối cùng sẽ thua.</li>
+                <li>**Nếu chỉ còn 1 quả trên bàn, người vừa di chuyển sẽ THẮNG ngay lập tức.**</li>
+                <li>**Nếu lấy hết quả (còn 0 quả), người vừa di chuyển sẽ THUA.**</li>
             </ul>
         </div>
     </div>
@@ -324,9 +325,6 @@
 
             selectedRowIndex = rowIndex;
             // The logic: Clicking index i means we take fruit i and everything to the RIGHT (visualizing array 0..n).
-            // Actually simpler: In Nim, order doesn't matter.
-            // UI Logic: Clicking index `i` selects `i` and all subsequent fruits (visual right side).
-            // So if row has 10 fruits (idx 0-9). Click idx 7. We take 7, 8, 9 (3 fruits).
             // count = total - index
             
             const totalInRow = currentRows[rowIndex];
@@ -378,17 +376,27 @@
             // 2. Update Logic
             currentRows[selectedRowIndex] -= selectedCount;
             
+            // Calculate total remaining after the move
+            const totalRemaining = currentRows.reduce((a, b) => a + b, 0);
+
             // Reset selection
             selectedRowIndex = -1;
             selectedCount = 0;
             renderBoard();
+            
+            // --- Cập nhật Kiểm tra Kết thúc Game theo luật mới ---
 
-            // 3. Check Win
-            if (checkGameOver()) {
-                handleGameOver(currentPlayer === 1 ? 2 : 1); // If current player moved and cleared board? No.
-                // Wait. Rule: Last one taking loses.
-                // If board is empty AFTER my turn, I took the last one. I lose.
-                // So the OTHER player wins.
+            // 3. Kiểm tra Thắng/Thua
+            if (totalRemaining === 1) {
+                // Luật mới: Nếu chỉ còn 1 quả, người vừa di chuyển (currentPlayer) thắng ngay.
+                handleGameOver(currentPlayer);
+                isProcessing = false;
+                return;
+            } else if (totalRemaining === 0) {
+                // Nếu lấy hết (còn 0 quả), người vừa di chuyển (currentPlayer) thua.
+                // Người còn lại thắng.
+                handleGameOver(currentPlayer === 1 ? 2 : 1); 
+                isProcessing = false;
                 return;
             }
 
@@ -430,11 +438,7 @@
             }
         }
 
-        function checkGameOver() {
-            // Game over if sum of all rows is 0
-            const total = currentRows.reduce((a, b) => a + b, 0);
-            return total === 0;
-        }
+        // Đã loại bỏ hàm checkGameOver() cũ và tích hợp logic vào confirmMove()
 
         function handleGameOver(winner) {
             let winnerName = "";
@@ -442,14 +446,20 @@
 
             if (gameMode === 'PVP') {
                 winnerName = `Người chơi ${winner} Thắng!`;
-                loserText = `Người chơi ${winner === 1 ? 2 : 1} đã phải ăn quả cuối cùng.`;
+                // Nếu thắng vì để lại 1 quả
+                if (currentRows.reduce((a, b) => a + b, 0) === 1) {
+                    loserText = `Người chơi ${winner === 1 ? 2 : 1} đã bị kẹt lại với quả cuối cùng.`;
+                } else {
+                    // Nếu thắng vì người kia lấy hết (tổng 0)
+                    loserText = `Người chơi ${winner === 1 ? 2 : 1} đã lấy quả cuối cùng.`;
+                }
             } else {
                 if (winner === 1) {
                     winnerName = "BẠN THẮNG!";
-                    loserText = "Bot đã phải ăn quả cuối cùng.";
+                    loserText = currentRows.reduce((a, b) => a + b, 0) === 1 ? "Bot đã bị kẹt lại với quả cuối cùng." : "Bot đã lấy quả cuối cùng.";
                 } else {
                     winnerName = "BOT THẮNG!";
-                    loserText = "Bạn đã phải ăn quả cuối cùng.";
+                    loserText = currentRows.reduce((a, b) => a + b, 0) === 1 ? "Bạn đã bị kẹt lại với quả cuối cùng." : "Bạn đã lấy quả cuối cùng.";
                 }
             }
 
@@ -458,7 +468,7 @@
             gameOverModal.classList.remove('hidden');
         }
 
-        // --- BOT LOGIC (Không đổi) ---
+        // --- BOT LOGIC (Không đổi, vì chiến lược tối ưu vẫn là Misère Nim) ---
 
         function botTurn() {
             const move = calculateBotMove();
@@ -510,36 +520,62 @@
             currentRows.forEach(c => nimSum ^= c);
 
             // Check for Endgame Scenario (Misere Play Exception)
-            // If all piles have either 0 or 1 item, we want to leave an ODD number of 1s.
+            // If all piles have either 0 or 1 item, we want to leave an ODD number of 1s (which forces opponent to leave 1 fruit, winning for us).
             let nonOnePiles = 0;
             currentRows.forEach(c => { if (c > 1) nonOnePiles++; });
 
             if (nonOnePiles === 0) {
-                // We are in endgame (only 1s left).
-                // We want to take 1 such that remaining count of 1s is ODD?
-                // Wait, simply: number of piles with size > 0.
-                // If currently even number of piles, taking 1 leaves odd. Winner.
-                // If currently odd, we are forced to leave even. Loser.
-                // Just take 1 from any pile.
+                // Only 1s left.
+                const totalOnes = currentRows.reduce((sum, count) => sum + count, 0);
+                
+                // If totalOnes is > 1: Bot wins by leaving exactly 1 fruit if totalOnes is even.
+                // If totalOnes is even (e.g., 2, 4), take (totalOnes - 1) fruits.
+                // If totalOnes is odd (e.g., 3, 5), take (totalOnes - 1) fruits. 
+                // Wait, under the Misère rule that ends when 1 fruit is left, the winning move is to leave 1 fruit.
+                
+                // Number of piles of size 1 remaining
+                const pilesOfOne = currentRows.filter(c => c === 1).length;
+
+                if (pilesOfOne > 0) {
+                    // Bot wants to leave 1 fruit total.
+                    const takeAmount = pilesOfOne - 1;
+                    
+                    // Find a pile of size 1 to take from
+                    const targetRowIndex = currentRows.findIndex(c => c === 1);
+                    
+                    // The move is to take all but 1 fruit.
+                    // If pilesOfOne is 2, Bot must take 1.
+                    // If pilesOfOne is 3, Bot must take 2.
+                    // This is wrong for Nim. Bot must pick one pile and take some/all.
+                    
+                    // Simplified: Since all piles are 1, Bot just takes 1 from any pile if total is > 1.
+                    if (totalOnes > 1) {
+                         const targetRow = currentRows.findIndex(c => c === 1);
+                         return { rowIndex: targetRow, count: 1 }; // Leaves totalOnes - 1 fruits
+                    }
+                }
+                
+                // If totalOnes is 1, Bot is forced to take it (losing move).
                 return getRandomMove(); 
             }
             
             // Special Misere Adjustment:
             // If there is exactly ONE pile with > 1 item.
             if (nonOnePiles === 1) {
-                // We want to reduce this pile so that the remaining piles (all size 1) count is ODD.
-                // Find the big pile
                 let bigPileIdx = currentRows.findIndex(c => c > 1);
-                let onesCount = 0;
-                currentRows.forEach(c => { if(c === 1) onesCount++; });
+                let onesCount = currentRows.filter(c => c === 1).length;
                 
-                // If onesCount is Even (e.g. 2 piles of 1), we want to leave 1 item in the big pile (total 1s = 3 => odd => we win).
-                // If onesCount is Odd, we want to remove the entire big pile (total 1s = odd => we win).
-                
+                // We want to reduce the big pile so that the total remaining count of 1s is ODD (winning Misère position).
+                // Or rather, we want to leave a total of 1 fruit if possible.
+
+                // Target Misère Nim Strategy: Make remaining 1-piles count ODD.
                 let targetSize = (onesCount % 2 === 0) ? 1 : 0;
                 let takeAmount = currentRows[bigPileIdx] - targetSize;
                 
-                return { rowIndex: bigPileIdx, count: takeAmount };
+                // Ensure move is legal
+                if (takeAmount > 0) {
+                    return { rowIndex: bigPileIdx, count: takeAmount };
+                }
             }
 
             // Standard Nim Strategy (Make Nim-Sum 0)
@@ -553,7 +589,6 @@
             }
 
             // If Nim-Sum is already 0 (Losing position), or fallback
-            // Just take 1 from the largest pile to prolong game and hope for opponent mistake
             let maxVal = -1;
             let maxIdx = -1;
             currentRows.forEach((c, i) => {
